@@ -1,15 +1,13 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:email_authendication/pages/Update_employee.dart';
 import 'package:email_authendication/pages/add_employee.dart';
 import 'package:email_authendication/pages/login_page.dart';
+import 'package:email_authendication/profile_picture_bloc/profile_picture_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:image_picker/image_picker.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,11 +20,12 @@ class _HomePageState extends State<HomePage> {
   String? userName;
   String? profilePicUrl;
 
+
   @override
   void initState() {
     super.initState();
     fetchUsername();
-    fetchProfilePic();
+    context.read<ProfilePictureBloc>().add((ProfilePictureFetch()));
   }
 
   @override
@@ -42,51 +41,71 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               SizedBox(height: 18.h),
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 65.r,
-                    backgroundColor: Colors.grey,
-                    child:
-                        profilePicUrl == null
-                            ? SvgPicture.asset(
-                              "assets/images/profile-default.svg",
-                              height: 130.h,
-                              width: 130.w,
-                              fit: BoxFit.cover,
-                            )
-                            : ClipOval(
-                              child: Image.network(
-                                profilePicUrl!,
-                                height: 128.h,
-                                width: 128.w,
-                                fit: BoxFit.fill,
-                              ),
+              BlocConsumer<ProfilePictureBloc, ProfilePictureState>(
+                listener: (context, state) {
+                  if (state is ProfilePictureError) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      // SnackBar(content: Text("something went wrong")),
+                      SnackBar(content: Text(state.error)),
+                    );
+                  }
+                  },
+                builder: (context, state) {
+                  if(state is ProfilePictureLoading){
+                    return Center(child: CircularProgressIndicator());
+                  }else if (state is ProfilePictureLoaded){
+                    return Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 65.r,
+                          backgroundColor: Colors.grey,
+                          child: ClipOval(
+                            child: Image.network(
+                              state.imageURl,
+                              height: 128.h,
+                              width: 128.w,
+                              fit: BoxFit.fill,
                             ),
-                  ),
-                  Positioned(
-                    bottom: -8.h,
-                    child: IconButton(
-                      onPressed: () async {
-                        // 1. Pick image, upload to Firebase, and update Firestore
-                        String imageUrl = await uploadProfilePicture();
-
-                        if (imageUrl.isNotEmpty) {
-                          if (kDebugMode) {
-                            print("Profile picture uploaded and Firestore updated: $imageUrl");
-                          }
-                        } else {
-                          if (kDebugMode) {
-                            print("Image upload failed.");
-                          }
-                        }
-                        // Optionally, fetch the updated profile picture to display
-                        await fetchProfilePic();  // Fetch the updated image URL from Firestore
-                      },
-                      icon: Icon(Icons.add_a_photo),
-                    ),
-                  ),
-                ],
+                          ),
+                        ),
+                        Positioned(
+                          bottom: -8.h,
+                          child: IconButton(
+                            onPressed: () async {
+                              context.read<ProfilePictureBloc>().add(UploadProfilePicture());
+                            },
+                            icon: Icon(Icons.add_a_photo),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  else {
+                    return Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 65.r,
+                          backgroundColor: Colors.grey,
+                          child: SvgPicture.asset(
+                            "assets/images/profile-default.svg",
+                            height: 130.h,
+                            width: 130.w,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          bottom: -8.h,
+                          child: IconButton(
+                            onPressed: () {
+                              context.read<ProfilePictureBloc>().add(UploadProfilePicture());
+                            },
+                            icon: Icon(Icons.add_a_photo),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  },
               ),
               Text(
                 userName != null ? 'Welcome, $userName!' : 'Loading...',
@@ -248,112 +267,120 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
-  Future<File?> pickImage() async {
-    try {
-      final XFile? pickedFile = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-      );
-
-      if (pickedFile == null) {
-        if (kDebugMode) print("No image selected.");
-        return null;
-      }
-
-      File imageFile = File(pickedFile.path);
-      if (kDebugMode) print("Image picked: ${imageFile.path}");
-      return imageFile;
-    } catch (e) {
-      if (kDebugMode) print("Error picking image: $e");
-      return null;
-    }
-  }
-
-  Future<String> uploadProfilePicture() async {
-    try {
-      File? imageFile = await pickImage();
-
-      if (imageFile == null) {
-        if (kDebugMode) print("No image selected.");
-        return "";
-      }
-
-      if (!await imageFile.exists()) {
-        if (kDebugMode) print("File does not exist.");
-        return "";
-      }
-
-      String fileName =
-          "profile_pictures/${DateTime.now().millisecondsSinceEpoch}.jpg";
-      Reference ref = FirebaseStorage.instance.ref().child(fileName);
-
-      if (kDebugMode) print("Uploading image to Firebase Storage...");
-
-      UploadTask uploadTask = ref.putFile(imageFile);
-
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        if (kDebugMode) {
-          print(
-            "Upload progress: ${snapshot.bytesTransferred} / ${snapshot.totalBytes}",
-          );
-        }
-      });
-
-      TaskSnapshot snapshot = await uploadTask;
-
-      String downloadUrl = await snapshot.ref.getDownloadURL();
-      if (kDebugMode) print("Image uploaded successfully: $downloadUrl");
-
-      await updateProfilePicture(downloadUrl);
-      return downloadUrl;
-    } catch (e) {
-      if (kDebugMode) print("Error uploading image: $e");
-      return "";
-    }
-  }
-
-  Future<void> updateProfilePicture(String imageUrl) async {
-    User? user = FirebaseAuth.instance.currentUser;
-
-    if (user != null) {
-      await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
-        "profilePic": imageUrl,
-      }, SetOptions(merge: true));
-    }
-  }
-
-  Future<String?> fetchProfilePic() async {
-    User? user = FirebaseAuth.instance.currentUser;
-
-    if (user != null) {
-      try {
-        DocumentSnapshot doc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get();
-
-        if (doc.exists) {
-          // Safely check if the document data is not null
-          var data = doc.data() as Map<String, dynamic>?;
-
-          if (data != null && data.containsKey('profilePic')) {
-            setState(() {
-              profilePicUrl = data['profilePic'];
-            });
-            return profilePicUrl; // Return the fetched URL
-          } else {
-            print("Profile picture field doesn't exist");
-            return null; // Return null if field doesn't exist
-          }
-        } else {
-          print("Document doesn't exist");
-          return null; // Return null if document doesn't exist
-        }
-      } catch (e) {
-        print("Error fetching profile picture: $e");
-        return null; // Return null in case of error
-      }
-    }
-    return null; // Return null if user is not logged in
-  }
+  // <editor-fold desc="without bloc">
+  // Future<File?> pickImage() async {
+  //   try {
+  //     final XFile? pickedFile = await ImagePicker().pickImage(
+  //       source: ImageSource.gallery,
+  //     );
+  //
+  //     if (pickedFile == null) {
+  //       if (kDebugMode) print("No image selected.");
+  //       return null;
+  //     }
+  //
+  //     File imageFile = File(pickedFile.path);
+  //     if (kDebugMode) print("Image picked: ${imageFile.path}");
+  //     return imageFile;
+  //   } catch (e) {
+  //     if (kDebugMode) print("Error picking image: $e");
+  //     return null;
+  //   }
+  // }
+  //
+  // Future<String> uploadProfilePicture() async {
+  //   try {
+  //     File? imageFile = await pickImage();
+  //
+  //     if (imageFile == null) {
+  //       if (kDebugMode) print("No image selected.");
+  //       return "";
+  //     }
+  //
+  //     if (!await imageFile.exists()) {
+  //       if (kDebugMode) print("File does not exist.");
+  //       return "";
+  //     }
+  //
+  //     String fileName =
+  //         "profile_pictures/${DateTime.now().millisecondsSinceEpoch}.jpg";
+  //     Reference ref = FirebaseStorage.instance.ref().child(fileName);
+  //
+  //     if (kDebugMode) print("Uploading image to Firebase Storage...");
+  //
+  //     UploadTask uploadTask = ref.putFile(imageFile);
+  //
+  //     uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+  //       if (kDebugMode) {
+  //         print(
+  //           "Upload progress: ${snapshot.bytesTransferred} / ${snapshot.totalBytes}",
+  //         );
+  //       }
+  //     });
+  //
+  //     TaskSnapshot snapshot = await uploadTask;
+  //
+  //     String downloadUrl = await snapshot.ref.getDownloadURL();
+  //     if (kDebugMode) print("Image uploaded successfully: $downloadUrl");
+  //
+  //     await updateProfilePicture(downloadUrl);
+  //     return downloadUrl;
+  //   } catch (e) {
+  //     if (kDebugMode) print("Error uploading image: $e");
+  //     return "";
+  //   }
+  // }
+  //
+  // Future<void> updateProfilePicture(String imageUrl) async {
+  //   User? user = FirebaseAuth.instance.currentUser;
+  //
+  //   if (user != null) {
+  //     await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
+  //       "profilePic": imageUrl,
+  //     }, SetOptions(merge: true));
+  //   }
+  // }
+  //
+  // Future<String?> fetchProfilePic() async {
+  //   User? user = FirebaseAuth.instance.currentUser;
+  //
+  //   if (user != null) {
+  //     try {
+  //       DocumentSnapshot doc =
+  //           await FirebaseFirestore.instance
+  //               .collection('users')
+  //               .doc(user.uid)
+  //               .get();
+  //
+  //       if (doc.exists) {
+  //         // Safely check if the document data is not null
+  //         var data = doc.data() as Map<String, dynamic>?;
+  //
+  //         if (data != null && data.containsKey('profilePic')) {
+  //           setState(() {
+  //             profilePicUrl = data['profilePic'];
+  //           });
+  //           return profilePicUrl; // Return the fetched URL
+  //         } else {
+  //           if (kDebugMode) {
+  //             print("Profile picture field doesn't exist");
+  //           }
+  //           return null; // Return null if field doesn't exist
+  //         }
+  //       } else {
+  //         if (kDebugMode) {
+  //           print("Document doesn't exist");
+  //         }
+  //         return null; // Return null if document doesn't exist
+  //       }
+  //     } catch (e) {
+  //       if (kDebugMode) {
+  //         print("Error fetching profile picture: $e");
+  //       }
+  //       return null; // Return null in case of error
+  //     }
+  //   }
+  //   return null; // Return null if user is not logged in
+  // }
+//</editor-fold>
 }
