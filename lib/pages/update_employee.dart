@@ -25,6 +25,21 @@ class _UpdateEmployeeState extends State<UpdateEmployee> {
   TextEditingController editEmployeeNameController = TextEditingController();
   TextEditingController editEmployeeAgeController = TextEditingController();
 
+
+  @override
+  void initState() {
+    editEmployeeNameController = TextEditingController(text: widget.oldName);
+    editEmployeeAgeController = TextEditingController(text: widget.oldAge);
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    editEmployeeNameController.dispose();
+    editEmployeeAgeController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(

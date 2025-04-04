@@ -20,6 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   TextEditingController loginPasswordController = TextEditingController();
   TextEditingController loginRePasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool islogin = false;
 
   @override
   void dispose() {
@@ -118,10 +119,15 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Center(
-                        child: Text(
-                          "Submit",
-                          style: GoogleFonts.poppins(color: Colors.white),
-                        ),
+                        child:
+                            islogin
+                                ? CircularProgressIndicator(color: Colors.white)
+                                : Text(
+                                  "Submit",
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                  ),
+                                ),
                       ),
                     ),
                   ),
@@ -151,12 +157,12 @@ class _LoginPageState extends State<LoginPage> {
                               decoration: TextDecoration.underline,
                             ),
                           ),
-                        ],  //Children
+                        ], //Children
                       ),
                     ),
                   ),
                 ),
-              ],  //Children
+              ], //Children
             ),
           ),
         ),
@@ -168,6 +174,9 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    setState(() {
+      islogin = true;
+    });
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: loginEmailController.text.trim(),
@@ -180,15 +189,36 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on FirebaseAuthException catch (e) {
       if (kDebugMode) {
-
+        print(e);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("User Doesn't exist Try Register"),
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.transparent,
+            content: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black.withAlpha(10)),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withAlpha(10),
+                      offset: Offset(0, 7),
+                      blurRadius: 7
+                  )
+                ],
+                borderRadius: BorderRadius.circular(12.r),
+                color: Colors.white,
+              ),
+              child: Center(child: Text("User Doesn't exist Try Register",style: TextStyle(color: Colors.black),)),
+            ),
           ), // Correct way to show a SnackBar
         );
 
         print(e);
       }
+    } finally {
+      setState(() {
+        islogin = false;
+      });
     }
   }
 }

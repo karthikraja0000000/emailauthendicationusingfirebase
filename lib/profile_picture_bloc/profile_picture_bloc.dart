@@ -14,19 +14,57 @@ class ProfilePictureBloc
     extends Bloc<ProfilePictureEvent, ProfilePictureState> {
   ProfilePictureBloc() : super(ProfilePictureInitial()) {
     on<UploadProfilePicture>((event, emit) async {
-      String imageUrl = await uploadProfilePicture();
 
-      if (imageUrl.isNotEmpty) {
-        if (kDebugMode) {
-          print("Profile picture uploaded and Firestore updated: $imageUrl");
-        }
 
-      } else {
-        emit(ProfilePictureError(error: "Image upload failed."));
+      // First pick the image without showing loading state
+
+      File? imageFile = await pickImage();
+      emit(ProfilePictureLoading());
+
+      if (kDebugMode) {
+        print('State: ProfilePictureLoading (after image selection)');
       }
 
+      // Process the upload with the already selected image
+      try {
+        String fileName = "profile_pictures/${DateTime.now().millisecondsSinceEpoch}.jpg";
+        Reference ref = FirebaseStorage.instance.ref().child(fileName);
+
+        if (kDebugMode) print("Uploading image to Firebase Storage...");
+
+        UploadTask uploadTask = ref.putFile(imageFile!);
+
+        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+          if (kDebugMode) {
+            print(
+              "Upload progress: ${snapshot.bytesTransferred} / ${snapshot.totalBytes}",
+            );
+          }
+        });
+
+        TaskSnapshot snapshot = await uploadTask;
+
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+        if (kDebugMode) print("Image uploaded successfully: $downloadUrl");
+
+        await updateProfilePicture(downloadUrl);
+
+        if (downloadUrl.isNotEmpty) {
+          if (kDebugMode) {
+            print("Profile picture uploaded and Firestore updated: $downloadUrl");
+            print('State: ProfilePictureLoaded (Upload)');
+          }
+          emit(ProfilePictureLoaded(imageURl: downloadUrl));
+        } else {
+          emit(ProfilePictureError(error: "Image upload failed."));
+        }
+      } catch (e) {
+        if (kDebugMode) print("Error during upload: $e");
+        emit(ProfilePictureError(error:"profile picture not selected"));
+      }
     });
     on<ProfilePictureFetch>((event, emit) async {
+
       User? user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
@@ -44,12 +82,12 @@ class ProfilePictureBloc
               String profilePicUrl = data['profilePic'];
 
               emit(ProfilePictureLoaded(imageURl: profilePicUrl));
+              print('State: ProfilePictureLoaded (Fetch)');
+
             } else {
-              emit(
-                ProfilePictureError(
-                  error: "no profile picture try adding profile picture",
-                ),
-              );
+              if (kDebugMode) {
+                print('State: ProfilePictureError (No profile picture)');
+              }
             }
           } else {
             emit(ProfilePictureError(error: "Document doesn't exist"));
@@ -76,6 +114,7 @@ class ProfilePictureBloc
       File imageFile = File(pickedFile.path);
       if (kDebugMode) print("Image picked: ${imageFile.path}");
       return imageFile;
+
     } catch (e) {
       if (kDebugMode) print("Error picking image: $e");
       return null;

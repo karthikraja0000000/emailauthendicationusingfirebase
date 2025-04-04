@@ -4,6 +4,7 @@ import 'package:email_authendication/pages/add_employee.dart';
 import 'package:email_authendication/pages/login_page.dart';
 import 'package:email_authendication/profile_picture_bloc/profile_picture_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -19,7 +20,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? userName;
   String? profilePicUrl;
-
 
   @override
   void initState() {
@@ -44,16 +44,31 @@ class _HomePageState extends State<HomePage> {
               BlocConsumer<ProfilePictureBloc, ProfilePictureState>(
                 listener: (context, state) {
                   if (state is ProfilePictureError) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      // SnackBar(content: Text("something went wrong")),
-                      SnackBar(content: Text(state.error)),
+                    context.read<ProfilePictureBloc>().add(
+                      ProfilePictureFetch(),
                     );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(state.error)));
                   }
-                  },
+                },
                 builder: (context, state) {
-                  if(state is ProfilePictureLoading){
-                    return Center(child: CircularProgressIndicator());
-                  }else if (state is ProfilePictureLoaded){
+                  if (state is ProfilePictureLoading) {
+                    if (kDebugMode) {
+                      print('Builder: ProfilePictureLoading');
+                    }
+
+                    return Center(
+                      child: CircleAvatar(
+                        radius: 65.r,
+                        backgroundColor: Colors.grey,
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    );
+                  } else if (state is ProfilePictureLoaded) {
+                    if (kDebugMode) {
+                      print('Builder: ProfilePictureLoaded');
+                    }
                     return Stack(
                       children: [
                         CircleAvatar(
@@ -72,15 +87,19 @@ class _HomePageState extends State<HomePage> {
                           bottom: -8.h,
                           child: IconButton(
                             onPressed: () async {
-                              context.read<ProfilePictureBloc>().add(UploadProfilePicture());
+                              context.read<ProfilePictureBloc>().add(
+                                UploadProfilePicture(),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("it might take few min please wait......")),
+                              );
                             },
                             icon: Icon(Icons.add_a_photo),
                           ),
                         ),
                       ],
                     );
-                  }
-                  else {
+                  } else {
                     return Stack(
                       children: [
                         CircleAvatar(
@@ -97,7 +116,9 @@ class _HomePageState extends State<HomePage> {
                           bottom: -8.h,
                           child: IconButton(
                             onPressed: () {
-                              context.read<ProfilePictureBloc>().add(UploadProfilePicture());
+                              context.read<ProfilePictureBloc>().add(
+                                UploadProfilePicture(),
+                              );
                             },
                             icon: Icon(Icons.add_a_photo),
                           ),
@@ -105,7 +126,7 @@ class _HomePageState extends State<HomePage> {
                       ],
                     );
                   }
-                  },
+                },
               ),
               Text(
                 userName != null ? 'Welcome, $userName!' : 'Loading...',
@@ -119,7 +140,6 @@ class _HomePageState extends State<HomePage> {
                     context,
                     MaterialPageRoute(builder: (context) => LoginPage()),
                   );
-
                 },
                 child: Text(
                   "Log Out",
@@ -133,7 +153,7 @@ class _HomePageState extends State<HomePage> {
               SizedBox(height: 24.h),
               GestureDetector(
                 onTap: () {
-                  Navigator.pushReplacement(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => AddEmployee()),
                   );
@@ -382,5 +402,5 @@ class _HomePageState extends State<HomePage> {
   //   }
   //   return null; // Return null if user is not logged in
   // }
-//</editor-fold>
+  //</editor-fold>
 }

@@ -23,6 +23,7 @@ class _RegisterPageState extends State<RegisterPage> {
   TextEditingController passwordController = TextEditingController();
   TextEditingController rePasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool isRegister = false;
 
   @override
   void dispose() {
@@ -173,10 +174,15 @@ class _RegisterPageState extends State<RegisterPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Center(
-                        child: Text(
-                          "Submit",
-                          style: GoogleFonts.poppins(color: Colors.white),
-                        ),
+                        child:
+                            isRegister
+                                ? CircularProgressIndicator(color: Colors.white)
+                                : Text(
+                                  "Submit",
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                  ),
+                                ),
                       ),
                     ),
                   ),
@@ -223,6 +229,9 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    setState(() {
+      isRegister = true;
+    });
     try {
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
@@ -243,13 +252,36 @@ class _RegisterPageState extends State<RegisterPage> {
       );
     } catch (e) {
       if (kDebugMode) {
+        print(e);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
-          ),
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            behavior: SnackBarBehavior.floating,
+            content: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black.withAlpha(10)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(10),
+                    offset: Offset(0, 7),
+                    blurRadius: 7
+                  )
+                ],
+                borderRadius: BorderRadius.circular(12.r),
+                color: Colors.white,
+              ),
+              child: Center(child: Text("User Already exist Try Login",style: TextStyle(color: Colors.black),)),
+            ),
+          ), // Correct way to show a SnackBar
         );
-        print(e); // Logs the error in debug mode
+
+        print(e);
       }
+    }finally{
+      setState(() {
+        isRegister=false;
+      });
     }
   }
 }
